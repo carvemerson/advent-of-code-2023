@@ -28,7 +28,7 @@ $seedsRange = [];
 for ($i = 0; $i < count($seeds) / 2; $i++) {
     $seedsRange[] = [
         $seeds[$i * 2],
-        $seeds[$i * 2] + $seeds[$i * 2 + 1],
+        $seeds[$i * 2] + $seeds[$i * 2 + 1] - 1,
     ];
 }
 
@@ -48,108 +48,107 @@ foreach ($maps as $key => $map) {
     });
 }
 
-
-function mapRecursive($ranges, $row, $deep = 0) {
-    echo "opa";
-    $mapped = [];
-    $splitRanges = [];
-
-    if (count($ranges) == 0) {
+function getIntersection($a, $b, $c, $d) {
+    if ($a > $d || $b < $c) {
         return [];
     }
 
-    if ($deep > 10) {
-        return [];
-    }
-
-    foreach($ranges as $seedRange) {
-        $A = $seedRange[0];
-        $B = $seedRange[1];
-
-        $C = $row[0];
-        $D = $row[1];
-        $mapDiff = $row[2];
-
-        if ($A >= $C && $B <= $D) {
-            $mapped[] = [
-                $A + $mapDiff,
-                $B + $mapDiff,
-            ];
-            continue;
-        }
-
-        if ($A < $C && $B > $D) {
-            $splitRanges[] = [
-                $A,
-                $C,
-            ];
-            $splitRanges[] = [
-                $D,
-                $B,
-            ];
-            $mapped[] = [
-                $C + $mapDiff,
-                $D + $mapDiff,
-            ];
-            continue;
-        }
-
-        if ($A < $C && $B >= $C && $B < $D) {
-            $splitRanges[] = [
-                $A,
-                $C,
-            ];
-
-            $mapped[] = [
-                $C + $mapDiff,
-                $B + $mapDiff,
-            ];
-            continue;
-        }
-
-        if ($A >= $C && $A < $D && $B > $D) {
-            $mapped[] = [
-                $A + $mapDiff,
-                $D + $mapDiff,
-            ];
-
-            $splitRanges[] = [
-                $D,
-                $B,
-            ];
-            continue;
-        }
-
-        if ($B < $C || $A > $D) {
-            $splitRanges[] = [
-                $A,
-                $B,
-            ];
-        }
-    }
-
-    $mapped = array_merge($mapped, mapRecursive($splitRanges, $row, $deep + 1));
-
-    return $mapped;
+    return [
+        max($a, $c),
+        min($b, $d),
+    ];
 }
 
-
-foreach($mapsRange as $key => $map) {
-    $newSeedsRanges = [];
-    foreach($map as $row) {
-        $newSeedsRanges = array_merge($seedsRange, mapRecursive($seedsRange, $row));
-
-        $seedsRange = $newSeedsRanges;
-        $newSeedsRanges = [];
+function getDiffLeft($a, $b, $c, $d) {
+    if ($a >= $c) {
+        return [];
     }
+
+    return [
+        $a,
+        min($c - 1, $b),
+    ];
+}
+
+function getDiffRight($a, $b, $c, $d) {
+    if ($b <= $d) {
+        return [];
+    }
+
+    return [
+        max($d + 1, $a),
+        $b,
+    ];
 }
 
 $result = PHP_INT_MAX;
 foreach($seedsRange as $seedRange) {
-    $result = min($result, $seedRange[0]);
+    $rangesToProcess = [
+        $seedRange,
+    ];
+
+    foreach ($mapsRange as $key => $maps) {
+        echo $key . "\n";
+        foreach($rangesToProcess as $seedToBeProcessed) {
+            $a = $seedToBeProcessed[0];
+            $b = $seedToBeProcessed[1];
+            echo "seed to be processed $a $b\n";
+
+            // Process the ranges (maps
+            $i = 0;
+            foreach ($maps as $map) {
+                $shouldStop = true;
+                $c = $map[0];
+                $d = $map[1];
+                $diff = $map[2];
+                // Mapped, add the diff to the seed
+                $intersection = getIntersection($a, $b, $c, $d);
+                if (!empty($intersection)) {
+                    $intersection = [
+                        $intersection[0] + $diff,
+                        $intersection[1] + $diff,
+                    ];
+                    $newSeeds[] = $intersection;
+                    echo "new seed $intersection[0] $intersection[1]\n";
+                }
+
+                // Not mapped and on the left, there is no range to add, repeat the seed
+                $diffLeft = getDiffLeft($a, $b, $c, $d);
+                if (!empty($diffLeft)) {
+                    $newSeeds[] = $diffLeft;
+                    echo "new seed $diffLeft[0] $diffLeft[1]\n";
+                }
+
+                // Not mapped and on the right, we can have a range to map, so add it
+                $diffRight = getDiffRight($a, $b, $c, $d);
+                if (!empty($diffRight)) {
+                    $shouldStop = false;
+                    $a = $diffRight[0];
+                    $b = $diffRight[1];
+                    if ($i == count($maps) - 1) {
+                        $newSeeds[] = [
+                            $a,
+                            $b,
+                        ];
+                    }
+                    echo "new seed $a $b\n";
+                }
+
+                if ($shouldStop) {
+                    break;
+                }
+
+                $i++;
+            }
+        }
+        $rangesToProcess = $newSeeds;
+        $newSeeds = [];
+    }
+    echo "*************** END SEED ***************\n";
+
+    foreach ($rangesToProcess as $seedToBeProcessed) {
+        $result = min($result, $seedToBeProcessed[0]);
+    }
 }
 
-echo $result . PHP_EOL;
-
-//print_r($mapsRange);
-
+echo $result . "\n";
